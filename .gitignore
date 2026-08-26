@@ -1,0 +1,4 @@
+# Secret keys and envirnoments files
+*.env
+venv/
+env/
