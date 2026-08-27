@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "Agentic RAG Widget API"
     ENVIRONMENT: str = "development"
+    DATABASE_URL: str
 
 
 def get_settings() -> Settings:
