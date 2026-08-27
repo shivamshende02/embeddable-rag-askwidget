@@ -1,6 +1,8 @@
-def main():
-    print("Hello from embeddable-rag-askwidget!")
+from fastapi import FastAPI
 
+app =  FastAPI(title="Agentic RAG Widget API",version="1.0.0")
 
-if __name__ == "__main__":
-    main()
+@app.get("/health",tags=["Health Check"])
+async def health_check():
+    """Health check endpoint to verify the service is running"""
+    return {"status": "healthy"}
