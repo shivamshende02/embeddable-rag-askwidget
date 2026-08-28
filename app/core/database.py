@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import get_settings
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Fetch the global settings instance containing DATABASE_URL
 settings = get_settings()
@@ -22,3 +24,7 @@ async_session_maker = async_sessionmaker(
 # 3. Define the DeclarativeBase class for all ORM models to inherit from
 class Base(DeclarativeBase):
     pass
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_maker() as session:
+        yield session
