@@ -1,9 +1,10 @@
 import ollama
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.embeddings import embed_texts 
 from app.services.vector_store import search_similar_chunks, search_semantic_cache, store_semantic_cache
 from app.guardrails.pii_detector import PII_PATTERNS
+from app.core.limiter import limiter
 from langsmith import traceable
 
 def redact_pii(text: str) -> str:
@@ -32,7 +33,8 @@ def generate_answer(question: str, context: str) -> str:
     return response["message"]["content"]
 
 @router.post("/", response_model=ChatResponse)
-async def chat(payload: ChatRequest):
+@limiter.limit("10/minute")
+async def chat(request: Request, payload: ChatRequest):
     # 1. Redact PII from the incoming question
     safe_question = redact_pii(payload.question)
     
