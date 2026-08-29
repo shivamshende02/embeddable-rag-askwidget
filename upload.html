@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Document Management - Upload</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #1f2937;
+    }
+    .upload-card {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 480px;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+    .drop-zone {
+      border: 2px dashed #d1d5db;
+      border-radius: 8px;
+      padding: 32px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: #f9fafb;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #111827;
+      background: #f3f4f6;
+    }
+    .drop-zone-text {
+      font-size: 14px;
+      color: #4b5563;
+    }
+    .drop-zone-text span {
+      color: #2563eb;
+      font-weight: 500;
+    }
+    .file-info {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #374151;
+      display: none;
+      background: #e5e7eb;
+      padding: 8px 12px;
+      border-radius: 6px;
+      word-break: break-all;
+    }
+    .upload-btn {
+      margin-top: 20px;
+      width: 100%;
+      background: #111827;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .upload-btn:hover {
+      background: #1f2937;
+    }
+    .upload-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .status-message {
+      margin-top: 16px;
+      font-size: 14px;
+      padding: 10px;
+      border-radius: 6px;
+      display: none;
+    }
+    .status-message.success {
+      background: #d1fae5;
+      color: #065f46;
+      display: block;
+    }
+    .status-message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="upload-card">
+    <h2>Upload Knowledge Base Document</h2>
+    <p class="subtitle">Add .pdf or .txt files (Max 10MB) to populate your RAG pipeline.</p>
+
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-zone-text">
+        Drag & drop your file here, or <span>browse</span>
+      </div>
+      <input type="file" id="file-input" accept=".pdf,.txt" style="display: none;">
+    </div>
+
+    <div class="file-info" id="file-info"></div>
+
+    <button class="upload-btn" id="upload-btn" disabled>Upload Document</button>
+
+    <div class="status-message" id="status-message"></div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const fileInfo = document.getElementById("file-info");
+    const uploadBtn = document.getElementById("upload-btn");
+    const statusMessage = document.getElementById("status-message");
+
+    let selectedFile = null;
+
+    // Trigger file picker on click
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    // Handle file selection via input
+    fileInput.addEventListener("change", (e) => {
+      handleFile(e.target.files[0]);
+    });
+
+    // Drag and drop handlers
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleFile(file) {
+      if (!file) return;
+
+      // Validate extension
+      const validExtensions = [".pdf", ".txt"];
+      const fileExt = "." + file.name.split(".").pop().toLowerCase();
+      
+      if (!validExtensions.includes(fileExt)) {
+        showStatus("Invalid file type. Only .pdf and .txt are allowed.", "error");
+        resetForm();
+        return;
+      }
+
+      // Validate size (10MB)
+      const maxSizeMB = 10;
+      if (file.size / (1024 * 1024) > maxSizeMB) {
+        showStatus("File size exceeds 10MB limit.", "error");
+        resetForm();
+        return;
+      }
+
+      selectedFile = file;
+      fileInfo.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+      fileInfo.style.display = "block";
+      uploadBtn.disabled = false;
+      statusMessage.style.display = "none";
+    }
+
+    // Upload action
+    uploadBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "Uploading...";
+      statusMessage.style.display = "none";
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const response = await fetch("http://localhost:8000/documents/", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || "Server failed to process document.");
+        }
+
+        const result = await response.json();
+        showStatus(`Success! Document uploaded and queued for processing (ID: ${result.id}).`, "success");
+        resetForm();
+      } catch (error) {
+        showStatus(`Upload failed: ${error.message}`, "error");
+        uploadBtn.disabled = false;
+      } finally {
+        uploadBtn.textContent = "Upload Document";
+      }
+    });
+
+    function showStatus(text, type) {
+      statusMessage.textContent = text;
+      statusMessage.className = `status-message ${type}`;
+    }
+
+    function resetForm() {
+      selectedFile = null;
+      fileInput.value = "";
+      fileInfo.style.display = "none";
+      uploadBtn.disabled = true;
+    }
+  </script>
+
+</body>
+</html>
