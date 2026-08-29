@@ -11,7 +11,12 @@ from app.services.vector_store import ensure_collection, upsert_chunks
 from fastapi import HTTPException
 from app.services.vector_store import delete_document_vectors
 
+ALLOWED_EXTENSIONS = {".pdf", ".txt"}
+MAX_FILE_SIZE_MB = 10
+
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
 
 
 @router.get("/", response_model=list[DocumentResponse])
@@ -44,21 +49,22 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
+    # 1. Validate file extension
+    extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type '{extension}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
+        )
+    
+    # 2. Read file content and validate size
     content = await file.read()
-
-    db_document = Document(
-        filename=file.filename or "unknown",
-        content_type=file.content_type or "application/octet-stream",
-        size_bytes=len(content),
-        status="processing",
-        chunk_count=0,
-    )
-    db.add(db_document)
-    await db.commit()
-    await db.refresh(db_document)
-
-    background_tasks.add_task(process_document, str(db_document.id), db_document.filename, content)
-    return db_document
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > MAX_FILE_SIZE_MB:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds the {MAX_FILE_SIZE_MB}MB upload limit.",
+        )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
