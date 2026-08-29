@@ -2,6 +2,7 @@ import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from qdrant_client.models import ScoredPoint
+from langsmith import traceable
 
 
 _client = QdrantClient(url="http://localhost:6333")
@@ -59,3 +60,25 @@ def search_similar_chunks(query_vector: list[float], top_k: int = 5, score_thres
         })
         
     return formatted_results     
+
+@traceable(name="retrieve_chunks")
+def search_similar_chunks(query_vector: list[float], top_k: int = 3, score_threshold: float = 0.3) -> list[dict]:
+    search_results = _client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=query_vector,
+        limit=top_k,
+        score_threshold=score_threshold,
+    )
+    
+    formatted_results = []
+    for hit in search_results:
+        payload = hit.payload or {}
+        formatted_results.append({
+            "content": payload.get("content", ""),
+            "score": hit.score,
+            "document_id": payload.get("document_id"),
+        })
+        
+    return formatted_results
+
+
