@@ -1,6 +1,7 @@
 import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+from qdrant_client.models import ScoredPoint
 
 _client = QdrantClient(url="http://localhost:6333")
 COLLECTION_NAME = "documents"
@@ -34,4 +35,22 @@ def delete_document_vectors(document_id: str) -> None:
                 must=[qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id))]
             )
         ),
-    )    
+    )   
+
+def search_similar_chunks(query_vector: list[float], top_k: int = 5) -> list[dict]:
+    response = _client.query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_vector,
+        limit=top_k,
+    )
+
+    formatted_results = []
+    for hit in response.points:
+        payload = hit.payload or {}
+        formatted_results.append({
+            "content": payload.get("content", ""),
+            "score": hit.score,
+            "document_id": payload.get("document_id"),
+        })
+
+    return formatted_results     
