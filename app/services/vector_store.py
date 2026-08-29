@@ -1,9 +1,46 @@
 import uuid
+from ollama import _client
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from qdrant_client.models import ScoredPoint
 from langsmith import traceable
+from qdrant_client.models import Distance, VectorParams, PointStruct, ScoredPoint
 
+CACHE_COLLECTION_NAME = "chat_semantic_cache"
+
+def init_cache_collection():
+    collections = [c.name for c in _client.get_collections().collections]
+    if CACHE_COLLECTION_NAME not in collections:
+        _client.create_collection(
+            collection_name=CACHE_COLLECTION_NAME,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE), # Adjust size based on your embedding model
+        )
+def search_semantic_cache(query_vector: list[float], score_threshold: float = 0.95) -> str | None:
+    init_cache_collection()
+    hits = _client.search(
+        collection_name=CACHE_COLLECTION_NAME,
+        query_vector=query_vector,
+        limit=1,
+        score_threshold=score_threshold,
+    )
+    if hits:
+        return hits[0].payload.get("answer")
+    return None
+
+def store_semantic_cache(question: str, query_vector: list[float], answer: str):
+    init_cache_collection()
+    import uuid
+    point_id = str(uuid.uuid4())
+    _client.upsert(
+        collection_name=CACHE_COLLECTION_NAME,
+        points=[
+            PointStruct(
+                id=point_id,
+                vector=query_vector,
+                payload={"question": question, "answer": answer}
+            )
+        ]
+    )        
 
 _client = QdrantClient(url="http://localhost:6333")
 COLLECTION_NAME = "documents"

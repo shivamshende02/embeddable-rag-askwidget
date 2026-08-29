@@ -15,6 +15,7 @@ dependencies = [
     "pypdf>=6.16.2",
     "python-multipart>=0.0.32",
     "qdrant-client==1.11.*",
+    "redis>=8.1.0",
     "requests>=2.34.2",
     "sentence-transformers>=6.0.0",
     "sqlalchemy>=2.0.52",

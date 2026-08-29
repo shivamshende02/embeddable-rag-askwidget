@@ -2,8 +2,8 @@ import ollama
 from fastapi import APIRouter
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.embeddings import embed_texts 
-from app.services.vector_store import search_similar_chunks
-from app.guardrails.pii_detector import detect_pii, PII_PATTERNS
+from app.services.vector_store import search_similar_chunks, search_semantic_cache, store_semantic_cache
+from app.guardrails.pii_detector import PII_PATTERNS
 from langsmith import traceable
 
 def redact_pii(text: str) -> str:
@@ -31,33 +31,33 @@ def generate_answer(question: str, context: str) -> str:
     )
     return response["message"]["content"]
 
-
 @router.post("/", response_model=ChatResponse)
 async def chat(payload: ChatRequest):
     # 1. Redact PII from the incoming question
     safe_question = redact_pii(payload.question)
     
-    # Optional verification print to check redaction in terminal
-    print(f"Original Question: {payload.question}")
-    print(f"Safe Question (Redacted): {safe_question}")
-    
-    # 2. Embed the safe, redacted question
+    # 2. Embed the safe question first (needed for both semantic cache lookup and RAG search)
     query_vector = embed_texts([safe_question])[0]
     
-    # 3. Search for similar chunks with score threshold
+    # 3. Check Semantic Cache in Qdrant (Threshold >= 0.95 for high semantic overlap)
+    cached_answer = search_semantic_cache(query_vector, score_threshold=0.95)
+    if cached_answer:
+        print("Semantic Cache hit! Returning response from Qdrant cache.")
+        return ChatResponse(answer=cached_answer, results=[])
+
+    # 4. Search for similar document chunks if cache misses
     results = search_similar_chunks(query_vector=query_vector, top_k=3, score_threshold=0.3)
     
-    # 4. Refuse if no relevant context found
+    # 5. Refuse if no relevant context found
     if not results:
-        return ChatResponse(
-            answer="I don't have enough information in the knowledge base to answer that question.",
-            results=[]
-        )
+        refusal_msg = "I don't have enough information in the knowledge base to answer that question."
+        return ChatResponse(answer=refusal_msg, results=[])
     
-    # 5. Build context string
+    # 6. Build context string and generate answer via LLM
     context = "\n\n".join(r["content"] for r in results)
-    
-    # 6. Generate answer using the traced helper function
     answer_text = generate_answer(question=safe_question, context=context)
+
+    # 7. Store the new question vector and answer in the semantic cache
+    store_semantic_cache(safe_question, query_vector, answer_text)
 
     return ChatResponse(answer=answer_text, results=results)
