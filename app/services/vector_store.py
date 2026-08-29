@@ -3,6 +3,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from qdrant_client.models import ScoredPoint
 
+
 _client = QdrantClient(url="http://localhost:6333")
 COLLECTION_NAME = "documents"
 EMBEDDING_DIM = 384  # matches all-MiniLM-L6-v2
@@ -37,21 +38,24 @@ def delete_document_vectors(document_id: str) -> None:
         ),
     )   
 
-def search_similar_chunks(query_vector: list[float], top_k: int = 3, threshold: float = 0.21) -> list[dict]:
-    response = _client.query_points(
+def search_similar_chunks(query_vector: list[float], top_k: int = 5, score_threshold: float | None = None) -> list[dict]:
+    # Pass score_threshold directly to Qdrant's search method if supported, 
+    # or pass it via query_filter / score filter parameters.
+    # Qdrant client search typically accepts score_threshold directly:
+    search_results = _client.search(
         collection_name=COLLECTION_NAME,
-        query=query_vector,
+        query_vector=query_vector,
         limit=top_k,
+        score_threshold=score_threshold,  # <-- Add this here
     )
-
+    
     formatted_results = []
-    for hit in response.points:
+    for hit in search_results:
         payload = hit.payload or {}
-        if hit.score >= threshold:
-            formatted_results.append({
-                "content": payload.get("content", ""),
-                "score": hit.score,
-                "document_id": payload.get("document_id"),
-            })
-
+        formatted_results.append({
+            "content": payload.get("content", ""),
+            "score": hit.score,
+            "document_id": payload.get("document_id"),
+        })
+        
     return formatted_results     
