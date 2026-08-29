@@ -37,7 +37,7 @@ def delete_document_vectors(document_id: str) -> None:
         ),
     )   
 
-def search_similar_chunks(query_vector: list[float], top_k: int = 5) -> list[dict]:
+def search_similar_chunks(query_vector: list[float], top_k: int = 3, threshold: float = 0.21) -> list[dict]:
     response = _client.query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
@@ -47,10 +47,11 @@ def search_similar_chunks(query_vector: list[float], top_k: int = 5) -> list[dic
     formatted_results = []
     for hit in response.points:
         payload = hit.payload or {}
-        formatted_results.append({
-            "content": payload.get("content", ""),
-            "score": hit.score,
-            "document_id": payload.get("document_id"),
-        })
+        if hit.score >= threshold:
+            formatted_results.append({
+                "content": payload.get("content", ""),
+                "score": hit.score,
+                "document_id": payload.get("document_id"),
+            })
 
     return formatted_results     
